@@ -9,6 +9,7 @@
 # BEiT: https://github.com/microsoft/unilm/tree/master/beit
 # --------------------------------------------------------
 
+# 微调的训练循环
 import math
 import sys
 from typing import Iterable, Optional

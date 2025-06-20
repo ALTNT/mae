@@ -9,6 +9,9 @@
 # DeiT: https://github.com/facebookresearch/deit
 # --------------------------------------------------------
 
+# MAE的核心实现
+#- `MaskedAutoencoderViT` : 主要的MAE模型类
+# - 包含编码器、解码器和掩码机制
 from functools import partial
 
 import torch
@@ -119,12 +122,14 @@ class MaskedAutoencoderViT(nn.Module):
         x = torch.einsum('nhwpqc->nchpwq', x)
         imgs = x.reshape(shape=(x.shape[0], 3, h * p, h * p))
         return imgs
-
+# 核心技术实现
     def random_masking(self, x, mask_ratio):
         """
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
         x: [N, L, D], sequence
+        # 随机掩盖patches
+    # 使用随机噪声排序来实现per-sample的随机掩码
         """
         N, L, D = x.shape  # batch, length, dim
         len_keep = int(L * (1 - mask_ratio))

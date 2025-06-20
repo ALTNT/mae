@@ -213,6 +213,7 @@ def main(args):
     print('Training time {}'.format(total_time_str))
 
 
+# python main_pretrain.py --model mae_vit_base_patch16 --batch_size 64
 if __name__ == '__main__':
     args = get_args_parser()
     args = args.parse_args()

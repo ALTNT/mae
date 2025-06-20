@@ -348,6 +348,7 @@ def main(args):
     print('Training time {}'.format(total_time_str))
 
 
+# python main_finetune.py --model vit_base_patch16 --finetune path/to/checkpoint
 if __name__ == '__main__':
     args = get_args_parser()
     args = args.parse_args()

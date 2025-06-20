@@ -16,6 +16,7 @@ import torch.nn as nn
 
 import timm.models.vision_transformer
 
+# Vision Transformer实现，用于微调
 
 class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
     """ Vision Transformer with support for global average pooling

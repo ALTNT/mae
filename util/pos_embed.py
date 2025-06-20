@@ -11,6 +11,7 @@ import numpy as np
 
 import torch
 
+# 位置编码实现
 # --------------------------------------------------------
 # 2D sine-cosine position embedding
 # References:

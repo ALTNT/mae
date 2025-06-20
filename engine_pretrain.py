@@ -17,6 +17,7 @@ import torch
 import util.misc as misc
 import util.lr_sched as lr_sched
 
+# 预训练的训练循环
 
 def train_one_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,

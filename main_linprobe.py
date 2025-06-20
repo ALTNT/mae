@@ -129,6 +129,7 @@ def main(args):
     cudnn.benchmark = True
 
     # linear probe: weak augmentation
+    # 线性探测使用较弱的数据增强
     transform_train = transforms.Compose([
             RandomResizedCrop(224, interpolation=3),
             transforms.RandomHorizontalFlip(),
@@ -249,6 +250,7 @@ def main(args):
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
         model_without_ddp = model.module
 
+# 使用LARS优化器，专门为大批量训练设计
     optimizer = LARS(model_without_ddp.head.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     print(optimizer)
     loss_scaler = NativeScaler()
@@ -308,6 +310,19 @@ def main(args):
     print('Training time {}'.format(total_time_str))
 
 
+# main_linprobe.py 功能解析
+## 什么是 Linear Probing (线性探测)？
+# Linear Probing (线性探测) 是深度学习中评估预训练模型表示质量的一种重要方法。它的核心思想是：
+
+# 1. 冻结预训练模型的所有参数
+# 2. 只训练最后的分类头（通常是一个线性层）
+# 3. 在下游任务上评估性能
+# 这种方法可以有效评估预训练模型学到的特征表示的质量，因为如果预训练的特征足够好，仅通过训练一个简单的线性分类器就能在下游任务上取得不错的性能。
+### 训练配置
+# - 默认epochs : 90轮（比全量微调少很多）
+# - 默认batch size : 512（较大的批量）
+# - 学习率 : 基于批量大小自动调整
+# - 权重衰减 : 默认为0（遵循MoCo v1的设置）
 if __name__ == '__main__':
     args = get_args_parser()
     args = args.parse_args()
