@@ -33,14 +33,14 @@ class MaskedAutoencoderViT(nn.Module):
 
         # --------------------------------------------------------------------------
         # MAE encoder specifics
-        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
+        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)#用于将输入图像转换为patch embeddings
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
         self.blocks = nn.ModuleList([
-            Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
+            Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)#实现了标准的Transformer编码器块
             for i in range(depth)])
         self.norm = norm_layer(embed_dim)
         # --------------------------------------------------------------------------
@@ -69,20 +69,20 @@ class MaskedAutoencoderViT(nn.Module):
         # initialization
         # initialize (and freeze) pos_embed by sin-cos embedding
         pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=True)
-        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))#torch.Size([1, 197, 768])
 
-        decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=True)
-        self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
+        decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=True)#torch.Size([1, 197, 512])
+        self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))#torch.Size([1, 197, 512]) 解码器通常使用较小的维度（512）
 
-        # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
-        w = self.patch_embed.proj.weight.data
-        torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+        # initialize patch_embed like nn.Linear (instead of nn.Conv2d) 将patch embedding的卷积层权重按照线性层的方式初始化 这样做是因为patch embedding在功能上类似于线性投影
+        w = self.patch_embed.proj.weight.data#torch.Size([768, 3, 16, 16])
+        torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))#这样做是因为patch embedding在功能上类似于线性投影
+#特殊Token初始化
+        # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)  timm库的截断正态分布（cutoff=2.0）实际上等效于普通正态分布
+        torch.nn.init.normal_(self.cls_token, std=.02)#分类token，用于全局特征表示使用标准差为0.02的正态分布初始化
+        torch.nn.init.normal_(self.mask_token, std=.02)#掩码token，用于替换被掩盖的patch
 
-        # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
-        torch.nn.init.normal_(self.cls_token, std=.02)
-        torch.nn.init.normal_(self.mask_token, std=.02)
-
-        # initialize nn.Linear and nn.LayerNorm
+        # initialize nn.Linear and nn.LayerNorm#其他层的初始化
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -95,18 +95,18 @@ class MaskedAutoencoderViT(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def patchify(self, imgs):
+    def patchify(self, imgs):#torch.Size([64, 3, 224, 224])
         """
         imgs: (N, 3, H, W)
         x: (N, L, patch_size**2 *3)
         """
-        p = self.patch_embed.patch_size[0]
+        p = self.patch_embed.patch_size[0]#16
         assert imgs.shape[2] == imgs.shape[3] and imgs.shape[2] % p == 0
 
-        h = w = imgs.shape[2] // p
-        x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p))
-        x = torch.einsum('nchpwq->nhwpqc', x)
-        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * 3))
+        h = w = imgs.shape[2] // p#14
+        x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p))#torch.Size([64, 3, 14, 16, 14, 16])
+        x = torch.einsum('nchpwq->nhwpqc', x)#torch.Size([64, 14, 14, 16, 16, 3])
+        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * 3))#torch.Size([64, 196, 768])
         return x
 
     def unpatchify(self, x):
@@ -123,7 +123,7 @@ class MaskedAutoencoderViT(nn.Module):
         imgs = x.reshape(shape=(x.shape[0], 3, h * p, h * p))
         return imgs
 # 核心技术实现
-    def random_masking(self, x, mask_ratio):
+    def random_masking(self, x, mask_ratio):#torch.Size([64, 196, 768]) 0.75
         """
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
@@ -132,82 +132,83 @@ class MaskedAutoencoderViT(nn.Module):
     # 使用随机噪声排序来实现per-sample的随机掩码
         """
         N, L, D = x.shape  # batch, length, dim
-        len_keep = int(L * (1 - mask_ratio))
+        len_keep = int(L * (1 - mask_ratio))#保留的patch数量 49
         
-        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+        noise = torch.rand(N, L, device=x.device)  # noise in [0, 1] torch.Size([64, 196])  
         
         # sort noise for each sample
-        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
-        ids_restore = torch.argsort(ids_shuffle, dim=1)
+        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove torch.Size([64, 196])
+        ids_restore = torch.argsort(ids_shuffle, dim=1)#torch.Size([64, 196]) 用于恢复原始顺序
 
         # keep the first subset
-        ids_keep = ids_shuffle[:, :len_keep]
-        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+        ids_keep = ids_shuffle[:, :len_keep]#torch.Size([64, 49])
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))#torch.Size([64, 49, 768])
 
         # generate the binary mask: 0 is keep, 1 is remove
-        mask = torch.ones([N, L], device=x.device)
+        mask = torch.ones([N, L], device=x.device)#torch.Size([64, 196])
         mask[:, :len_keep] = 0
         # unshuffle to get the binary mask
         mask = torch.gather(mask, dim=1, index=ids_restore)
 
         return x_masked, mask, ids_restore
 
-    def forward_encoder(self, x, mask_ratio):
+    def forward_encoder(self, x, mask_ratio):#torch.Size([64, 3, 224, 224]) 0.75
         # embed patches
-        x = self.patch_embed(x)
+        #实际就是通过一个 nn.conv2d实现的，只需要 stride =patch 的大小就行了
+        x = self.patch_embed(x)#用于将输入图像转换为patch embeddings 将2D图像转换为1D的patch序列 这是Vision Transformer处理图像的第一步。
 
         # add pos embed w/o cls token
-        x = x + self.pos_embed[:, 1:, :]
+        x = x + self.pos_embed[:, 1:, :]#torch.Size([64, 196, 768]) batch_size, seq_len, hid_dim
 
         # masking: length -> length * mask_ratio
-        x, mask, ids_restore = self.random_masking(x, mask_ratio)
+        x, mask, ids_restore = self.random_masking(x, mask_ratio)#torch.Size([64, 49, 768])  torch.Size([64, 196]) torch.Size([64, 196])
 
         # append cls token
-        cls_token = self.cls_token + self.pos_embed[:, :1, :]
-        cls_tokens = cls_token.expand(x.shape[0], -1, -1)
-        x = torch.cat((cls_tokens, x), dim=1)
+        cls_token = self.cls_token + self.pos_embed[:, :1, :]#torch.Size([1, 1, 768])
+        cls_tokens = cls_token.expand(x.shape[0], -1, -1)#torch.Size([64, 1, 768])
+        x = torch.cat((cls_tokens, x), dim=1)#torch.Size([64, 49+1=50, 768])
 
         # apply Transformer blocks
         for blk in self.blocks:
             x = blk(x)
-        x = self.norm(x)
+        x = self.norm(x)#torch.Size([64, 50, 768])
 
         return x, mask, ids_restore
 
-    def forward_decoder(self, x, ids_restore):
+    def forward_decoder(self, x, ids_restore):#torch.Size([64, 50, 768]) torch.Size([64, 196])
         # embed tokens
-        x = self.decoder_embed(x)
+        x = self.decoder_embed(x)#nn.Linear(embed_dim, decoder_embed_dim, bias=True) torch.Size([64, 50, 512])
 
-        # append mask tokens to sequence
-        mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
-        x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
-        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
-        x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
+        # append mask tokens to sequence self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
+        mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)#torch.Size([64, 147, 512]) 添加Mask Tokens
+        x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token torch.Size([64, 196, 512])
+        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle # 使用ids_restore将patches恢复到原始空间位置
+        x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token # 重新添加CLS token
 
-        # add pos embed
+        # add pos embed添加位置编码
         x = x + self.decoder_pos_embed
 
-        # apply Transformer blocks
+        # apply Transformer blocksTransformer解码
         for blk in self.decoder_blocks:
             x = blk(x)
-        x = self.decoder_norm(x)
+        x = self.decoder_norm(x)#torch.Size([64, 197, 768])
 
         # predictor projection
-        x = self.decoder_pred(x)
+        x = self.decoder_pred(x)#nn.Linear(decoder_embed_dim, patch_size**2 * in_chans, bias=True)
 
         # remove cls token
-        x = x[:, 1:, :]
+        x = x[:, 1:, :]#torch.Size([64, 196, 768])
 
         return x
 
-    def forward_loss(self, imgs, pred, mask):
+    def forward_loss(self, imgs, pred, mask):#torch.Size([64, 3, 224, 224]) torch.Size([64, 196, 768]) torch.Size([64, 196])
         """
         imgs: [N, 3, H, W]
         pred: [N, L, p*p*3]
         mask: [N, L], 0 is keep, 1 is remove, 
         """
-        target = self.patchify(imgs)
-        if self.norm_pix_loss:
+        target = self.patchify(imgs)#将图像转换为patch序列 可以这么玩？
+        if self.norm_pix_loss:#False
             mean = target.mean(dim=-1, keepdim=True)
             var = target.var(dim=-1, keepdim=True)
             target = (target - mean) / (var + 1.e-6)**.5
@@ -219,7 +220,7 @@ class MaskedAutoencoderViT(nn.Module):
         return loss
 
     def forward(self, imgs, mask_ratio=0.75):
-        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+        latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)#torch.Size([64, 50, 768])  torch.Size([64, 196]) torch.Size([64, 196]) 
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred, mask)
         return loss, pred, mask

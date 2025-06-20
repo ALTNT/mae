@@ -349,6 +349,29 @@ def main(args):
 
 
 # python main_finetune.py --model vit_base_patch16 --finetune path/to/checkpoint
+# 单GPU微调命令
+# python /root/code/mae/main_finetune.py \
+#     --batch_size 64 \
+#     --model vit_base_patch16 \
+#     --finetune /root/code/mae/checkpoints/mae_pretrain_vit_base.pth \
+#     --epochs 100 \
+#     --blr 5e-4 --layer_decay 0.65 \
+#     --weight_decay 0.05 --drop_path 0.1 --reprob 0.25 --mixup 0.8 --cutmix 1.0 \
+#     --data_path /root/autodl-tmp/imagenet \
+#     --output_dir ./finetune_output
+# 多GPU微调命令（推荐）
+# OMP_NUM_THREADS=1 python -m torch.distributed.launch --nproc_per_node=8 /root/code/mae/main_finetune.py \
+#     --accum_iter 4 \
+#     --batch_size 32 \
+#     --model vit_base_patch16 \
+#     --finetune /root/code/mae/checkpoints/mae_pretrain_vit_base.pth \
+#     --epochs 100 \
+#     --blr 5e-4 --layer_decay 0.65 \
+#     --weight_decay 0.05 --drop_path 0.1 --mixup 0.8 --cutmix 1.0 --reprob 0.25 \
+#     --dist_eval --data_path /root/autodl-tmp/imagenet \
+#     --output_dir ./finetune_output
+# 评估命令
+# python /root/code/mae/main_finetune.py --eval --resume ./finetune_output/checkpoint-best.pth --model vit_base_patch16 --batch_size 16 --data_path /root/autodl-tmp/imagenet
 if __name__ == '__main__':
     args = get_args_parser()
     args = args.parse_args()

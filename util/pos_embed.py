@@ -18,36 +18,36 @@ import torch
 # Transformer: https://github.com/tensorflow/models/blob/master/official/nlp/transformer/model_utils.py
 # MoCo v3: https://github.com/facebookresearch/moco-v3
 # --------------------------------------------------------
-def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
+def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):#768 14 True
     """
     grid_size: int of the grid height and width
     return:
     pos_embed: [grid_size*grid_size, embed_dim] or [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
     """
-    grid_h = np.arange(grid_size, dtype=np.float32)
-    grid_w = np.arange(grid_size, dtype=np.float32)
-    grid = np.meshgrid(grid_w, grid_h)  # here w goes first
-    grid = np.stack(grid, axis=0)
+    grid_h = np.arange(grid_size, dtype=np.float32)#(14,)
+    grid_w = np.arange(grid_size, dtype=np.float32)#(14,)
+    grid = np.meshgrid(grid_w, grid_h)  # here w goes first#2    np.meshgrid生成二维网格，grid_w对应列坐标，grid_h对应行坐标
+    grid = np.stack(grid, axis=0)#最后把这两个网格沿着新的轴堆叠起来，形成形状为[2, grid_size, grid_size]的数组，其中第一维代表坐标类型（0 是 x 坐标，1 是 y 坐标）。
 
-    grid = grid.reshape([2, 1, grid_size, grid_size])
-    pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
+    grid = grid.reshape([2, 1, grid_size, grid_size])#[2, 1, grid_size, grid_size]
+    pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)#(196, 768)
     if cls_token:
-        pos_embed = np.concatenate([np.zeros([1, embed_dim]), pos_embed], axis=0)
+        pos_embed = np.concatenate([np.zeros([1, embed_dim]), pos_embed], axis=0)#(197, 768)
     return pos_embed
 
 
-def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
+def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):#768 [2, 1, grid_size, grid_size]
     assert embed_dim % 2 == 0
 
     # use half of dimensions to encode grid_h
-    emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
-    emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
+    emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)#(14*14, 768/2)=(196, 384)
+    emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)#(14*14, 768/2)=(196, 384)
 
-    emb = np.concatenate([emb_h, emb_w], axis=1) # (H*W, D)
+    emb = np.concatenate([emb_h, emb_w], axis=1) # (H*W, D)#(196, 768)
     return emb
 
 
-def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
+def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):#768 (1, 14, 14)
     """
     embed_dim: output dimension for each position
     pos: a list of positions to be encoded: size (M,)
